@@ -115,6 +115,7 @@ class Leads_Sync_Backfill {
 				'ip'                => $row['user_ip'] ?? null,
 				'user_agent'        => $row['user_agent'] ?? '',
 				'referrer'         => $row['referer'] ?? ( $row['referer_title'] ?? '' ),
+				'status'            => self::normalize_status( $row['status'] ?? null ),
 			);
 		}
 
@@ -141,5 +142,19 @@ class Leads_Sync_Backfill {
 			'total'  => $total,
 			'batch'  => count( $rows ),
 		);
+	}
+
+	/**
+	 * Map Elementor Pro's raw status values to the dashboard's normalized set.
+	 * Elementor uses: 'new' (pending actions), 'success', 'error', 'spam'.
+	 */
+	private static function normalize_status( $raw ) {
+		if ( ! $raw ) return 'success';
+		$s = strtolower( (string) $raw );
+		if ( $s === 'success' )              return 'success';
+		if ( $s === 'error' || $s === 'failed' ) return 'failed';
+		if ( $s === 'new' || $s === 'pending' )  return 'pending';
+		if ( $s === 'spam' )                 return 'spam';
+		return 'unknown';
 	}
 }

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import Link from "next/link";
 import { formatRelative } from "@/lib/utils";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,6 +12,7 @@ type SearchParams = {
   q?: string;
   from?: string;
   to?: string;
+  status?: string;
   page?: string;
 };
 
@@ -25,12 +27,13 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
 
   let q = db
     .from("submissions")
-    .select("id, submitted_at, data, ip, referrer, source, sites(domain, display_name), forms(form_name, elementor_form_id)", { count: "exact" })
+    .select("id, submitted_at, data, ip, referrer, source, status, sites(domain, display_name), forms(form_name, elementor_form_id)", { count: "exact" })
     .order("submitted_at", { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
 
   if (searchParams.site_id) q = q.eq("site_id", searchParams.site_id);
   if (searchParams.form_id) q = q.eq("form_id", searchParams.form_id);
+  if (searchParams.status)  q = q.eq("status", searchParams.status);
   if (searchParams.from)    q = q.gte("submitted_at", searchParams.from);
   if (searchParams.to)      q = q.lte("submitted_at", searchParams.to);
   if (searchParams.q)       q = q.textSearch("data_tsv", searchParams.q, { type: "websearch" });
@@ -59,12 +62,19 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
         </div>
       </header>
 
-      <form className="bg-surface border border-border rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-3" method="get">
+      <form className="bg-surface border border-border rounded-lg p-4 grid grid-cols-2 md:grid-cols-6 gap-3" method="get">
         <select name="site_id" defaultValue={searchParams.site_id ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm">
           <option value="">All sites</option>
           {(sites ?? []).map((s) => (
             <option key={s.id} value={s.id}>{s.display_name}</option>
           ))}
+        </select>
+        <select name="status" defaultValue={searchParams.status ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm">
+          <option value="">Any status</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="pending">Pending</option>
+          <option value="spam">Spam</option>
         </select>
         <input name="from" type="date" defaultValue={searchParams.from ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm" />
         <input name="to" type="date" defaultValue={searchParams.to ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm" />
@@ -76,6 +86,7 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
         <table className="w-full text-sm">
           <thead className="bg-bg text-xs uppercase text-muted">
             <tr>
+              <th className="text-left px-4 py-2">Status</th>
               <th className="text-left px-4 py-2">When</th>
               <th className="text-left px-4 py-2">Site</th>
               <th className="text-left px-4 py-2">Form</th>
@@ -86,6 +97,9 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
           <tbody>
             {(rows ?? []).map((r: any) => (
               <tr key={r.id} className="border-t border-border align-top hover:bg-bg/40">
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <StatusBadge status={r.status} />
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div>{formatRelative(r.submitted_at)}</div>
                   <div className="text-xs text-muted">{new Date(r.submitted_at).toLocaleString()}</div>
@@ -109,7 +123,7 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
               </tr>
             ))}
             {(!rows || rows.length === 0) && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">No submissions match these filters.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted">No submissions match these filters.</td></tr>
             )}
           </tbody>
         </table>

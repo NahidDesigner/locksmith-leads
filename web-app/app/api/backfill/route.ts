@@ -15,7 +15,10 @@ type Row = {
   ip?: string | null;
   user_agent?: string;
   referrer?: string;
+  status?: "success" | "failed" | "pending" | "spam" | "unknown";
 };
+
+const ALLOWED_STATUS = new Set(["success", "failed", "pending", "spam", "unknown"]);
 
 export async function POST(req: NextRequest) {
   const site = await authenticateSite(req);
@@ -76,11 +79,14 @@ export async function POST(req: NextRequest) {
     referrer: r.referrer ?? null,
     utm: {},
     source: "backfill" as const,
+    status: ALLOWED_STATUS.has(r.status ?? "") ? r.status : "success",
   }));
 
+  // Not ignoreDuplicates — on re-sync we want Elementor's current status
+  // (e.g. a previously 'pending' row may now be 'success' or 'failed') to win.
   const { error: subErr, count } = await db
     .from("submissions")
-    .upsert(inserts, { onConflict: "site_id,external_id", ignoreDuplicates: true, count: "exact" });
+    .upsert(inserts, { onConflict: "site_id,external_id", count: "exact" });
 
   if (subErr) {
     return NextResponse.json({ error: "submissions_upsert_failed", detail: subErr.message }, { status: 500 });

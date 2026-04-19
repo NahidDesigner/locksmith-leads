@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   let q = supabaseAdmin()
     .from("submissions")
-    .select("submitted_at, data, ip, user_agent, referrer, utm, source, sites(domain, display_name), forms(form_name, elementor_form_id)")
+    .select("submitted_at, data, ip, user_agent, referrer, utm, source, status, sites(domain, display_name), forms(form_name, elementor_form_id)")
     .order("submitted_at", { ascending: false })
     .limit(50000);
 
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
   const rows = (data ?? []).map((r: any) => {
     const flat: Record<string, unknown> = {
       submitted_at: r.submitted_at,
+      status: r.status ?? "",
       site: r.sites?.display_name ?? "",
       domain: r.sites?.domain ?? "",
       form: r.forms?.form_name ?? "",

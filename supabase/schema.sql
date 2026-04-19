@@ -52,6 +52,7 @@ create table if not exists submissions (
   utm                  jsonb not null default '{}'::jsonb,
   received_at          timestamptz not null default now(),
   source               text not null default 'realtime' check (source in ('realtime','backfill','manual')),
+  status               text not null default 'success' check (status in ('success','failed','pending','spam','unknown')),
   -- generated tsvector for full-text search across all submission values
   data_tsv             tsvector generated always as (to_tsvector('simple', coalesce(data::text, ''))) stored,
   unique (site_id, external_id)
@@ -93,6 +94,7 @@ create index if not exists idx_submissions_form_submitted   on submissions (form
 create index if not exists idx_submissions_submitted        on submissions (submitted_at desc);
 create index if not exists idx_submissions_data_gin         on submissions using gin (data);
 create index if not exists idx_submissions_data_tsv         on submissions using gin (data_tsv);
+create index if not exists idx_submissions_site_status      on submissions (site_id, status);
 create index if not exists idx_heartbeats_site_received     on heartbeats (site_id, received_at desc);
 create index if not exists idx_alerts_site_created          on alerts (site_id, created_at desc);
 create index if not exists idx_alerts_unresolved            on alerts (resolved_at) where resolved_at is null;

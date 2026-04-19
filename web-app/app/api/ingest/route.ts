@@ -20,9 +20,12 @@ type Body = {
     referrer?: string;
     utm?: Record<string, string>;
     source?: "realtime" | "backfill" | "manual";
+    status?: "success" | "failed" | "pending" | "spam" | "unknown";
     external_id?: number | null;
   };
 };
+
+const ALLOWED_STATUS = new Set(["success", "failed", "pending", "spam", "unknown"]);
 
 export async function POST(req: NextRequest) {
   const site = await authenticateSite(req);
@@ -73,6 +76,9 @@ export async function POST(req: NextRequest) {
     referrer: body.submission.referrer ?? null,
     utm: body.submission.utm ?? {},
     source: body.submission.source ?? "realtime",
+    status: ALLOWED_STATUS.has(body.submission.status ?? "")
+      ? body.submission.status
+      : "success",
   };
 
   const { error: subErr } = body.submission.external_id

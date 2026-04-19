@@ -51,6 +51,10 @@ class Leads_Sync_Submission_Hook {
 					'referrer'    => isset( $_SERVER['HTTP_REFERER'] ) ? esc_url_raw( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) : '',
 					'utm'          => self::extract_utm( $meta ),
 					'source'       => 'realtime',
+					// Optimistic — action outcomes (email, webhook, etc.) aren't
+					// finalized at this hook. Backfill re-sync will correct any
+					// that ultimately failed using the real wp_e_submissions.status.
+					'status'       => 'success',
 				),
 			);
 
