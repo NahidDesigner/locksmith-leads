@@ -53,18 +53,37 @@ class Leads_Sync_Backfill {
 			return array( 'done' => true, 'synced' => 0, 'total' => 0 );
 		}
 
-		// Pull a batch of submissions ordered oldest-first so resume is deterministic.
+		// Inspect real columns so we pull what actually exists on this Elementor version.
+		$cols = $wpdb->get_col( "SHOW COLUMNS FROM {$submissions_table}" );
+		if ( empty( $cols ) ) {
+			return array(
+				'done'  => true, 'synced' => 0, 'total' => $total,
+				'error' => 'Could not read columns from ' . $submissions_table . ': ' . $wpdb->last_error,
+			);
+		}
+
+		// Pull full row with * — easier than guessing column names across Elementor Pro versions.
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT id, form_name, form_id, created_at, referer, user_agent, user_ip
-			 FROM {$submissions_table}
-			 ORDER BY id ASC
-			 LIMIT %d OFFSET %d",
+			"SELECT * FROM {$submissions_table} ORDER BY id ASC LIMIT %d OFFSET %d",
 			$limit,
 			$offset
 		), ARRAY_A );
 
+		if ( $wpdb->last_error ) {
+			return array(
+				'done'  => true, 'synced' => $offset, 'total' => $total,
+				'error' => 'SQL error on submissions query: ' . $wpdb->last_error,
+				'cols'  => $cols,
+			);
+		}
+
 		if ( empty( $rows ) ) {
-			return array( 'done' => true, 'synced' => $offset, 'total' => $total );
+			return array(
+				'done'   => true,
+				'synced' => $offset,
+				'total'  => $total,
+				'error'  => 'Zero rows returned at offset ' . $offset . ' (total=' . $total . '). Columns: ' . implode( ',', $cols ),
+			);
 		}
 
 		$ids = array_column( $rows, 'id' );
@@ -84,15 +103,18 @@ class Leads_Sync_Backfill {
 		$payload = array();
 		foreach ( $rows as $row ) {
 			$data = isset( $values_by_submission[ $row['id'] ] ) ? $values_by_submission[ $row['id'] ] : array();
+			// Elementor Pro column names vary slightly across versions — fall back gracefully.
+			$form_key  = $row['form_id']    ?? $row['element_id']     ?? 'unknown';
+			$form_name = $row['form_name']  ?? $row['post_id']        ?? 'Unnamed Form';
 			$payload[] = array(
 				'external_id'       => (int) $row['id'],
-				'elementor_form_id' => (string) $row['form_id'],
-				'form_name'         => (string) $row['form_name'],
-				'submitted_at'      => mysql_to_rfc3339( $row['created_at'] ),
+				'elementor_form_id' => (string) $form_key,
+				'form_name'         => (string) $form_name,
+				'submitted_at'      => mysql_to_rfc3339( $row['created_at'] ?? $row['created_at_gmt'] ?? current_time( 'mysql' ) ),
 				'data'              => $data,
-				'ip'                => $row['user_ip'] ?: null,
-				'user_agent'        => $row['user_agent'] ?: '',
-				'referrer'         => $row['referer'] ?: '',
+				'ip'                => $row['user_ip'] ?? null,
+				'user_agent'        => $row['user_agent'] ?? '',
+				'referrer'         => $row['referer'] ?? ( $row['referer_title'] ?? '' ),
 			);
 		}
 

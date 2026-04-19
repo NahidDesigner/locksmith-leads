@@ -1,8 +1,8 @@
 import { supabaseAdmin, type SiteStatsRow } from "@/lib/supabase";
 import { StatCard } from "@/components/StatCard";
 import { TrendChart, type TrendPoint } from "@/components/TrendChart";
-import { HealthBadge } from "@/components/HealthBadge";
-import { formatNumber, formatRelative, percentChange } from "@/lib/utils";
+import { SiteCard } from "@/components/SiteCard";
+import type { SparkPoint } from "@/components/Sparkline";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -26,24 +26,41 @@ export default async function Overview() {
     { total: 0, last_24h: 0, last_7d: 0, last_30d: 0, prior_7d: 0 }
   );
 
-  // Trend: daily counts for last 30 days, one series per site
+  // Daily counts: last 30 days, one row per (site, day)
   const { data: daily } = await db
     .from("daily_counts")
     .select("site_id, day, count")
     .gte("day", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
 
+  // Build an empty 30-day scaffold (keeps days with 0 visible)
+  const last30Days: string[] = [];
+  for (let i = 29; i >= 0; i--) {
+    last30Days.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+  }
+  const last7Days = last30Days.slice(-7);
+
+  // Per-site daily index: site_id → (day → count)
+  const perSite = new Map<string, Map<string, number>>();
+  for (const row of daily ?? []) {
+    if (!perSite.has(row.site_id)) perSite.set(row.site_id, new Map());
+    perSite.get(row.site_id)!.set(row.day, row.count);
+  }
+
+  function seriesFor(siteId: string, days: string[]): SparkPoint[] {
+    const m = perSite.get(siteId);
+    return days.map((d) => ({ day: d, count: m?.get(d) ?? 0 }));
+  }
+
+  // Aggregate trend line (all sites stacked by domain)
   const domainById = new Map(siteStats.map((s) => [s.site_id, s.domain]));
   const pointMap = new Map<string, TrendPoint>();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
-    pointMap.set(d, { day: d });
-  }
+  for (const d of last30Days) pointMap.set(d, { day: d });
   for (const row of daily ?? []) {
     const p = pointMap.get(row.day);
     if (!p) continue;
     const domain = domainById.get(row.site_id);
     if (!domain) continue;
-    p[domain] = (p[domain] as number ?? 0) + row.count;
+    p[domain] = ((p[domain] as number) ?? 0) + row.count;
   }
   const trendData = Array.from(pointMap.values());
   const domains = siteStats.map((s) => s.domain);
@@ -66,48 +83,22 @@ export default async function Overview() {
 
       <section>
         <h2 className="text-sm uppercase tracking-wider text-muted mb-3">By site</h2>
-        <div className="bg-surface border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-bg text-muted text-xs uppercase">
-              <tr>
-                <th className="text-left px-4 py-2">Site</th>
-                <th className="text-left px-4 py-2">Health</th>
-                <th className="text-right px-4 py-2">24h</th>
-                <th className="text-right px-4 py-2">7d</th>
-                <th className="text-right px-4 py-2">Δ vs prior 7d</th>
-                <th className="text-right px-4 py-2">Total</th>
-                <th className="text-right px-4 py-2">Last lead</th>
-              </tr>
-            </thead>
-            <tbody>
-              {siteStats.map((s) => {
-                const pct = percentChange(s.last_7d, s.prior_7d);
-                const dropped = pct !== null && pct <= -30;
-                return (
-                  <tr key={s.site_id} className="border-t border-border hover:bg-bg/50">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{s.display_name}</div>
-                      <div className="text-xs text-muted">{s.domain}</div>
-                    </td>
-                    <td className="px-4 py-3"><HealthBadge lastHeartbeatAt={s.last_heartbeat_at} /></td>
-                    <td className="px-4 py-3 text-right">{formatNumber(s.last_24h)}</td>
-                    <td className="px-4 py-3 text-right">{formatNumber(s.last_7d)}</td>
-                    <td className={`px-4 py-3 text-right ${pct === null ? "text-muted" : pct >= 0 ? "text-good" : dropped ? "text-bad font-medium" : "text-warn"}`}>
-                      {pct === null ? "—" : `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`}
-                    </td>
-                    <td className="px-4 py-3 text-right">{formatNumber(s.total_submissions)}</td>
-                    <td className="px-4 py-3 text-right text-muted">{formatRelative(s.last_submission_at)}</td>
-                  </tr>
-                );
-              })}
-              {siteStats.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">
-                  No sites yet. <Link href="/dashboard/sites" className="text-accent">Add a site</Link> to start receiving submissions.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {siteStats.length === 0 ? (
+          <div className="bg-surface border border-border rounded-lg px-4 py-10 text-center text-muted">
+            No sites yet. <Link href="/dashboard/sites" className="text-accent">Add a site</Link> to start receiving submissions.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {siteStats.map((s) => (
+              <SiteCard
+                key={s.site_id}
+                site={s}
+                weekly={seriesFor(s.site_id, last7Days)}
+                monthly={seriesFor(s.site_id, last30Days)}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
