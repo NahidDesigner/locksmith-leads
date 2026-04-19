@@ -16,18 +16,24 @@ export function SiteCard({ site, weekly, monthly }: Props) {
   const pctTone =
     pct === null ? "text-muted" : pct >= 0 ? "text-good" : dropped ? "text-bad" : "text-warn";
 
+  // Domain in DB may be stored with protocol + trailing slash
+  // (e.g. "https://foo.com/") or without ("foo.com"). Normalize for display
+  // and always produce a well-formed external href.
+  const bareDomain = site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  const href = `https://${bareDomain}`;
+
   return (
     <div className="bg-surface border border-border rounded-lg p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium truncate">{site.display_name}</div>
           <a
-            href={`https://${site.domain}`}
+            href={href}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-muted hover:text-accent truncate block"
           >
-            {site.domain}
+            {bareDomain}
           </a>
         </div>
         <HealthBadge lastHeartbeatAt={site.last_heartbeat_at} />
