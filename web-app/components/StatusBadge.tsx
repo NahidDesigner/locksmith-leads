@@ -1,28 +1,17 @@
 import { cn } from "@/lib/utils";
 
-type Status = "success" | "failed" | "pending" | "spam" | "unknown";
-
-const TONE: Record<Status, string> = {
-  success: "bg-good/20 text-good",
-  failed:  "bg-bad/20 text-bad",
-  pending: "bg-warn/20 text-warn",
-  spam:    "bg-bad/20 text-bad",
-  unknown: "bg-muted/20 text-muted",
-};
-
-const LABEL: Record<Status, string> = {
-  success: "success",
-  failed:  "failed",
-  pending: "pending",
-  spam:    "spam",
-  unknown: "unknown",
-};
-
 export function StatusBadge({ status }: { status?: string | null }) {
-  const s: Status = (status && (status in TONE) ? status : "unknown") as Status;
+  const failed = status === "failed";
   return (
-    <span className={cn("text-xs px-2 py-0.5 rounded font-medium", TONE[s])}>
-      {LABEL[s]}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium",
+        failed ? "bg-bad/20 text-bad" : "bg-good/20 text-good"
+      )}
+      title={failed ? "At least one form action failed" : "All form actions succeeded"}
+    >
+      <span aria-hidden>{failed ? "⚠" : "✓"}</span>
+      {failed ? "failed" : "success"}
     </span>
   );
 }

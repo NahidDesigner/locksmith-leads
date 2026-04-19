@@ -20,12 +20,12 @@ type Body = {
     referrer?: string;
     utm?: Record<string, string>;
     source?: "realtime" | "backfill" | "manual";
-    status?: "success" | "failed" | "pending" | "spam" | "unknown";
+    status?: "success" | "failed";
     external_id?: number | null;
   };
 };
 
-const ALLOWED_STATUS = new Set(["success", "failed", "pending", "spam", "unknown"]);
+const ALLOWED_STATUS = new Set(["success", "failed"]);
 
 export async function POST(req: NextRequest) {
   const site = await authenticateSite(req);

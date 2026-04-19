@@ -145,16 +145,11 @@ class Leads_Sync_Backfill {
 	}
 
 	/**
-	 * Map Elementor Pro's raw status values to the dashboard's normalized set.
-	 * Elementor uses: 'new' (pending actions), 'success', 'error', 'spam'.
+	 * Collapse Elementor Pro's raw status (new/success/error/spam/…) to
+	 * the binary the dashboard cares about: success or failed.
+	 * Only a clean 'success' counts — anything else is a failure to the client.
 	 */
 	private static function normalize_status( $raw ) {
-		if ( ! $raw ) return 'success';
-		$s = strtolower( (string) $raw );
-		if ( $s === 'success' )              return 'success';
-		if ( $s === 'error' || $s === 'failed' ) return 'failed';
-		if ( $s === 'new' || $s === 'pending' )  return 'pending';
-		if ( $s === 'spam' )                 return 'spam';
-		return 'unknown';
+		return strtolower( (string) $raw ) === 'success' ? 'success' : 'failed';
 	}
 }

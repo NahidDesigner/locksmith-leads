@@ -15,10 +15,10 @@ type Row = {
   ip?: string | null;
   user_agent?: string;
   referrer?: string;
-  status?: "success" | "failed" | "pending" | "spam" | "unknown";
+  status?: "success" | "failed";
 };
 
-const ALLOWED_STATUS = new Set(["success", "failed", "pending", "spam", "unknown"]);
+const ALLOWED_STATUS = new Set(["success", "failed"]);
 
 export async function POST(req: NextRequest) {
   const site = await authenticateSite(req);

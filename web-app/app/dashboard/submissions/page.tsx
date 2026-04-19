@@ -73,8 +73,6 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
           <option value="">Any status</option>
           <option value="success">Success</option>
           <option value="failed">Failed</option>
-          <option value="pending">Pending</option>
-          <option value="spam">Spam</option>
         </select>
         <input name="from" type="date" defaultValue={searchParams.from ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm" />
         <input name="to" type="date" defaultValue={searchParams.to ?? ""} className="bg-bg border border-border rounded px-3 py-2 text-sm" />

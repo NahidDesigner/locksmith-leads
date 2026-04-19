@@ -52,7 +52,7 @@ create table if not exists submissions (
   utm                  jsonb not null default '{}'::jsonb,
   received_at          timestamptz not null default now(),
   source               text not null default 'realtime' check (source in ('realtime','backfill','manual')),
-  status               text not null default 'success' check (status in ('success','failed','pending','spam','unknown')),
+  status               text not null default 'success' check (status in ('success','failed')),
   -- generated tsvector for full-text search across all submission values
   data_tsv             tsvector generated always as (to_tsvector('simple', coalesce(data::text, ''))) stored,
   unique (site_id, external_id)
