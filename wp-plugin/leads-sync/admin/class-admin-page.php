@@ -15,6 +15,44 @@ class Leads_Sync_Admin_Page {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'admin_post_leads_sync_test', array( __CLASS__, 'handle_test' ) );
+		add_action( 'wp_ajax_leads_sync_diag', array( __CLASS__, 'handle_diag' ) );
+	}
+
+	public static function handle_diag() {
+		check_ajax_referer( 'leads_sync_diag' );
+		if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+
+		global $wpdb;
+		$prefix = $wpdb->prefix;
+		$t_sub  = $prefix . 'e_submissions';
+		$t_act  = $prefix . 'e_submissions_actions_log';
+		$t_val  = $prefix . 'e_submissions_values';
+
+		$sub_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t_sub ) ) === $t_sub;
+		$act_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t_act ) ) === $t_act;
+		$val_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t_val ) ) === $t_val;
+
+		$settings = Leads_Sync_Settings::get();
+
+		wp_send_json_success( array(
+			'plugin_version'         => LEADS_SYNC_VERSION,
+			'wp_prefix'              => $prefix,
+			'submissions_table'      => $t_sub,
+			'submissions_exists'     => $sub_exists,
+			'submissions_count'      => $sub_exists ? (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t_sub}" ) : null,
+			'submissions_columns'    => $sub_exists ? $wpdb->get_col( "SHOW COLUMNS FROM {$t_sub}" ) : array(),
+			'submissions_min_id'     => $sub_exists ? (int) $wpdb->get_var( "SELECT MIN(id) FROM {$t_sub}" ) : null,
+			'submissions_max_id'     => $sub_exists ? (int) $wpdb->get_var( "SELECT MAX(id) FROM {$t_sub}" ) : null,
+			'actions_log_exists'     => $act_exists,
+			'actions_log_count'      => $act_exists ? (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t_act}" ) : null,
+			'actions_log_columns'    => $act_exists ? $wpdb->get_col( "SHOW COLUMNS FROM {$t_act}" ) : array(),
+			'values_table_exists'    => $val_exists,
+			'settings_endpoint'      => $settings['endpoint'],
+			'settings_api_key_len'   => strlen( $settings['api_key'] ),
+			'settings_last_sync_at'  => $settings['last_sync_at'],
+			'settings_last_sync_cnt' => $settings['last_sync_count'],
+			'is_configured'          => Leads_Sync_Settings::is_configured(),
+		) );
 	}
 
 	public static function menu() {
@@ -108,6 +146,36 @@ class Leads_Sync_Admin_Page {
 				<input type="hidden" name="action" value="leads_sync_test" />
 				<button type="submit" class="button">Send test heartbeat</button>
 			</form>
+
+			<hr>
+
+			<h2>Diagnostics</h2>
+			<p>Dumps the real Elementor table state so we can see what the sync is working with.</p>
+			<button id="leads-sync-diag" class="button">Run diagnostics</button>
+			<pre id="leads-sync-diag-out" style="background:#fff;border:1px solid #ccd;padding:1em;margin-top:1em;max-width:800px;overflow:auto;display:none;font-size:12px;"></pre>
+			<script>
+			(function(){
+				const btn = document.getElementById('leads-sync-diag');
+				const out = document.getElementById('leads-sync-diag-out');
+				if (!btn) return;
+				const nonce = '<?php echo wp_create_nonce( 'leads_sync_diag' ); ?>';
+				const url   = '<?php echo admin_url( 'admin-ajax.php' ); ?>';
+				btn.addEventListener('click', async () => {
+					btn.disabled = true;
+					out.style.display = 'block';
+					out.textContent = 'Running...';
+					const body = new URLSearchParams({ action: 'leads_sync_diag', _wpnonce: nonce });
+					try {
+						const res  = await fetch(url, { method: 'POST', body, credentials: 'same-origin' });
+						const json = await res.json();
+						out.textContent = JSON.stringify(json.data || json, null, 2);
+					} catch (e) {
+						out.textContent = 'Request failed: ' + e;
+					}
+					btn.disabled = false;
+				});
+			})();
+			</script>
 
 			<hr>
 
