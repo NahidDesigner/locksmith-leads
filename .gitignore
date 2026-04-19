@@ -1,0 +1,29 @@
+# Env / secrets
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+
+# Claude Code local config
+.claude/settings.local.json
+
+# Build artifacts we don't want in the repo
+wp-plugin/_zipcheck/
+wp-plugin/*.zip
