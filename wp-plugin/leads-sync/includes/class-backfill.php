@@ -33,6 +33,19 @@ class Leads_Sync_Backfill {
 
 	public static function run_batch( $offset, $limit ) {
 		global $wpdb;
+
+		// Fail loudly here rather than deep in the HTTP client so the admin UI
+		// shows exactly which setting is missing.
+		if ( ! Leads_Sync_Settings::is_configured() ) {
+			$s = Leads_Sync_Settings::get();
+			return array(
+				'done'   => true,
+				'synced' => 0,
+				'total'  => 0,
+				'error'  => 'Settings not configured. endpoint="' . $s['endpoint'] . '" api_key_len=' . strlen( $s['api_key'] ),
+			);
+		}
+
 		$prefix = $wpdb->prefix;
 
 		$submissions_table = $prefix . 'e_submissions';
