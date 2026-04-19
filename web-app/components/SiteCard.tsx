@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { HealthBadge } from "./HealthBadge";
 import { Sparkline, type SparkPoint } from "./Sparkline";
 import { LocalTime } from "./LocalTime";
 import { formatNumber, percentChange } from "@/lib/utils";
@@ -21,7 +20,7 @@ export function SiteCard({ site, visitors, submissionsMonthly, visitorsMonthly }
 
   return (
     <div className="bg-surface border border-border rounded-lg flex flex-col overflow-hidden hover:border-accent/40 transition-colors">
-      <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-3 border-b border-border/60">
+      <div className="px-5 pt-5 pb-4 border-b border-border/60">
         <div className="min-w-0">
           <div className="font-semibold truncate">{site.display_name}</div>
           <a
@@ -33,7 +32,6 @@ export function SiteCard({ site, visitors, submissionsMonthly, visitorsMonthly }
             {bareDomain}
           </a>
         </div>
-        <HealthBadge lastHeartbeatAt={site.last_heartbeat_at} />
       </div>
 
       <MetricBlock
