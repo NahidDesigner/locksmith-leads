@@ -61,7 +61,6 @@ export default async function Overview() {
   for (let i = 29; i >= 0; i--) {
     last30Days.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
   }
-  const last7Days = last30Days.slice(-7);
 
   // Per-site daily indices: site_id → (day → count)
   const subsPerSite = new Map<string, Map<string, number>>();
@@ -142,7 +141,7 @@ export default async function Overview() {
                 key={s.site_id}
                 site={s}
                 visitors={visitorStatsById.get(s.site_id) ?? null}
-                submissionsWeekly={subsSeries(s.site_id, last7Days)}
+                submissionsMonthly={subsSeries(s.site_id, last30Days)}
                 visitorsMonthly={visSeries(s.site_id, last30Days)}
               />
             ))}

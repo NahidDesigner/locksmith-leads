@@ -8,33 +8,27 @@ import type { SiteStatsRow, VisitorStatsRow } from "@/lib/supabase";
 type Props = {
   site: SiteStatsRow;
   visitors?: VisitorStatsRow | null;
-  submissionsWeekly: SparkPoint[];   // last 7 days
-  visitorsMonthly?: SparkPoint[];    // last 30 days
+  submissionsMonthly: SparkPoint[];
+  visitorsMonthly?: SparkPoint[];
 };
 
-export function SiteCard({ site, visitors, submissionsWeekly, visitorsMonthly }: Props) {
+export function SiteCard({ site, visitors, submissionsMonthly, visitorsMonthly }: Props) {
   const subPct = percentChange(site.last_7d, site.prior_7d);
-  const subTone = toneFor(subPct);
-
   const visPct = visitors ? percentChange(visitors.visitors_7d, visitors.visitors_prior_7d) : null;
-  const visTone = toneFor(visPct);
 
-  // Domain in DB may be stored with protocol + trailing slash (e.g.
-  // "https://foo.com/") or without ("foo.com"). Normalize for display
-  // and always produce a well-formed external href.
   const bareDomain = site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   const href = `https://${bareDomain}`;
 
   return (
-    <div className="bg-surface border border-border rounded-lg p-5 flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="bg-surface border border-border rounded-lg flex flex-col overflow-hidden hover:border-accent/40 transition-colors">
+      <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-3 border-b border-border/60">
         <div className="min-w-0">
-          <div className="font-medium truncate">{site.display_name}</div>
+          <div className="font-semibold truncate">{site.display_name}</div>
           <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-muted hover:text-accent truncate block"
+            className="text-xs text-muted hover:text-accent truncate block mt-0.5"
           >
             {bareDomain}
           </a>
@@ -42,56 +36,63 @@ export function SiteCard({ site, visitors, submissionsWeekly, visitorsMonthly }:
         <HealthBadge lastHeartbeatAt={site.last_heartbeat_at} />
       </div>
 
-      {/* Submissions */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs uppercase tracking-wider text-muted">Submissions</span>
-          <span className="text-xs text-muted">{formatNumber(site.total_submissions)} total</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center mb-2">
-          <Stat label="24h" value={site.last_24h} />
-          <Stat label="7d" value={site.last_7d} tone={subTone} sub={pctLabel(subPct)} />
-          <Stat label="30d" value={site.last_30d} />
-        </div>
-        <Sparkline data={submissionsWeekly} color="#22c55e" height={48} />
-      </section>
+      <MetricBlock
+        label="Submissions"
+        secondary={`${formatNumber(site.total_submissions)} all-time`}
+        primary={site.last_7d}
+        primaryLabel="last 7 days"
+        pct={subPct}
+        sideStats={[
+          { value: site.last_24h, label: "today" },
+          { value: site.last_30d, label: "30d" },
+        ]}
+        spark={submissionsMonthly}
+        color="#22c55e"
+      />
 
-      {/* Visitors */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs uppercase tracking-wider text-muted">Visitors</span>
-          <span className="text-xs text-muted">
-            {visitors ? `${formatNumber(visitors.pageviews_30d)} page views · 30d` : "no data yet"}
-          </span>
-        </div>
-        {visitors ? (
-          <>
-            <div className="grid grid-cols-3 gap-2 text-center mb-2">
-              <Stat label="24h" value={visitors.visitors_24h} />
-              <Stat label="7d" value={visitors.visitors_7d} tone={visTone} sub={pctLabel(visPct)} />
-              <Stat label="30d" value={visitors.visitors_30d} />
-            </div>
-            <Sparkline data={visitorsMonthly ?? []} color="#3b82f6" height={48} label="visitors" />
-          </>
-        ) : (
-          <div className="text-xs text-muted italic py-4 text-center border border-dashed border-border rounded">
-            Beacon not received yet — make sure plugin v1.0.6+ is active on this site.
+      <div className="h-px bg-border/60 mx-5" />
+
+      {visitors ? (
+        <MetricBlock
+          label="Visitors"
+          secondary={`${formatNumber(visitors.pageviews_30d)} page views · 30d`}
+          primary={visitors.visitors_7d}
+          primaryLabel="last 7 days"
+          pct={visPct}
+          sideStats={[
+            { value: visitors.visitors_24h, label: "today" },
+            { value: visitors.visitors_30d, label: "30d" },
+          ]}
+          spark={visitorsMonthly ?? []}
+          color="#3b82f6"
+          sparkLabel="visitors"
+        />
+      ) : (
+        <div className="px-5 py-4">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-xs uppercase tracking-wider text-muted">Visitors</span>
           </div>
-        )}
-      </section>
+          <div className="flex items-center gap-3 text-xs text-muted border border-dashed border-border rounded px-3 py-3">
+            <span className="inline-block w-2 h-2 rounded-full bg-warn" />
+            <span className="flex-1">
+              No beacon data yet. Install plugin v1.0.6+ and purge page caches.
+            </span>
+          </div>
+        </div>
+      )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
+      <div className="mt-auto border-t border-border px-5 py-3 flex items-center justify-between text-xs">
         <span className="text-muted">
-          Last lead:{" "}
+          Last lead{" "}
           <LocalTime
             iso={site.last_submission_at}
             mode="relative"
-            className="text-fg"
+            className="text-fg font-medium"
           />
         </span>
         <Link
           href={`/dashboard/submissions?site_id=${site.site_id}`}
-          className="text-accent hover:underline"
+          className="text-accent hover:underline font-medium"
         >
           View submissions →
         </Link>
@@ -100,24 +101,70 @@ export function SiteCard({ site, visitors, submissionsWeekly, visitorsMonthly }:
   );
 }
 
-function toneFor(pct: number | null) {
-  if (pct === null) return "text-muted";
-  if (pct >= 0) return "text-good";
-  if (pct <= -30) return "text-bad";
-  return "text-warn";
-}
-
-function pctLabel(pct: number | null): string | null {
-  if (pct === null) return null;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
-}
-
-function Stat({ label, value, tone, sub }: { label: string; value: number; tone?: string; sub?: string | null }) {
+function MetricBlock({
+  label,
+  secondary,
+  primary,
+  primaryLabel,
+  pct,
+  sideStats,
+  spark,
+  color,
+  sparkLabel,
+}: {
+  label: string;
+  secondary: string;
+  primary: number;
+  primaryLabel: string;
+  pct: number | null;
+  sideStats: Array<{ value: number; label: string }>;
+  spark: SparkPoint[];
+  color: string;
+  sparkLabel?: string;
+}) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-muted">{label}</div>
-      <div className="text-lg font-semibold mt-0.5">{formatNumber(value)}</div>
-      {sub && <div className={`text-[10px] mt-0.5 ${tone ?? "text-muted"}`}>{sub}</div>}
+    <div className="px-5 py-4">
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="text-xs uppercase tracking-wider text-muted">{label}</span>
+        <span className="text-xs text-muted">{secondary}</span>
+      </div>
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div className="flex items-end gap-2">
+          <div>
+            <div className="text-3xl font-semibold leading-none tabular-nums">
+              {formatNumber(primary)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-muted mt-1.5">
+              {primaryLabel}
+            </div>
+          </div>
+          {pct !== null && <DeltaPill pct={pct} />}
+        </div>
+        <div className="text-right text-xs space-y-1">
+          {sideStats.map((s) => (
+            <div key={s.label} className="tabular-nums">
+              <span className="font-medium text-fg">{formatNumber(s.value)}</span>
+              <span className="text-muted ml-1">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <Sparkline data={spark} color={color} height={56} label={sparkLabel} />
+    </div>
+  );
+}
+
+function DeltaPill({ pct }: { pct: number }) {
+  const up = pct >= 0;
+  const tone =
+    up ? "text-good bg-good/10" :
+    pct <= -30 ? "text-bad bg-bad/10" :
+                 "text-warn bg-warn/10";
+  const arrow = up ? "▲" : "▼";
+  return (
+    <div className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${tone}`}>
+      <span className="text-[9px]">{arrow}</span>
+      <span>{Math.abs(pct).toFixed(0)}%</span>
     </div>
   );
 }
