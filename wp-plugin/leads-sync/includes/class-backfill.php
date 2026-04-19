@@ -178,11 +178,21 @@ class Leads_Sync_Backfill {
 			'last_sync_count' => $new_offset,
 		) );
 
+		// Re-query total right before returning so we catch any weirdness
+		// between the initial read and now.
+		$total_recheck = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$submissions_table}" );
+
 		return array(
-			'done'   => $new_offset >= $total,
-			'synced' => $new_offset,
-			'total'  => $total,
-			'batch'  => count( $rows ),
+			'done'         => $new_offset >= $total,
+			'synced'       => $new_offset,
+			'total'        => $total,
+			'batch'        => count( $rows ),
+			'_debug_total_recheck' => $total_recheck,
+			'_debug_offset_in'     => $offset,
+			'_debug_limit'         => $limit,
+			'_debug_row_ids'       => array_slice( array_column( $rows, 'id' ), 0, 5 ),
+			'_debug_plugin_ver'    => LEADS_SYNC_VERSION,
+			'_debug_api_response'  => is_array( $result ) ? $result : null,
 		);
 	}
 

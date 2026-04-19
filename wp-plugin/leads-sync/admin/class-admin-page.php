@@ -188,6 +188,10 @@ class Leads_Sync_Admin_Page {
 			<div id="leads-sync-progress" style="margin-top:1em; display:none;">
 				<progress id="leads-sync-bar" value="0" max="100" style="width: 400px; height: 20px;"></progress>
 				<div id="leads-sync-status" style="margin-top: .5em;"></div>
+				<details style="margin-top: .5em;">
+					<summary style="cursor:pointer;font-size:12px;color:#666;">Last server response (debug)</summary>
+					<pre id="leads-sync-raw" style="background:#fff;border:1px solid #ccd;padding:1em;max-width:800px;overflow:auto;font-size:11px;"></pre>
+				</details>
 			</div>
 			<script>
 			(function(){
@@ -199,6 +203,7 @@ class Leads_Sync_Admin_Page {
 				const nonce  = '<?php echo wp_create_nonce( Leads_Sync_Backfill::AJAX_ACTION ); ?>';
 				const url    = '<?php echo admin_url( 'admin-ajax.php' ); ?>';
 
+				const raw = document.getElementById('leads-sync-raw');
 				btn.addEventListener('click', async () => {
 					btn.disabled = true;
 					wrap.style.display = 'block';
@@ -206,7 +211,11 @@ class Leads_Sync_Admin_Page {
 					while (true) {
 						const body = new URLSearchParams({ action: '<?php echo Leads_Sync_Backfill::AJAX_ACTION; ?>', nonce, offset });
 						const res  = await fetch(url, { method: 'POST', body, credentials: 'same-origin' });
-						const json = await res.json();
+						const text = await res.text();
+						raw.textContent = text;
+						let json;
+						try { json = JSON.parse(text); }
+						catch (e) { status.textContent = 'Non-JSON response (see debug)'; btn.disabled = false; return; }
 						if (!json.success) {
 							status.textContent = 'Failed: ' + (json.data && json.data.message || 'unknown');
 							btn.disabled = false;
