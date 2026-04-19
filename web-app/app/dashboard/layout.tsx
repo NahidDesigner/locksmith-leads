@@ -14,6 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
         <NavLink href="/dashboard" label="Overview" />
         <NavLink href="/dashboard/submissions" label="Submissions" />
+        <NavLink href="/dashboard/visitors" label="Visitors" />
         <NavLink href="/dashboard/sites" label="Sites" />
         <form action="/api/auth/logout" method="post" className="pt-6">
           <button className="text-xs text-muted hover:text-slate-200">Sign out</button>

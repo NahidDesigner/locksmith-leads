@@ -68,3 +68,15 @@ export type VisitorStatsRow = {
   pageviews_7d: number;
   pageviews_30d: number;
 };
+
+export type TopPathRow = {
+  path: string;
+  views: number;
+  visitors: number;
+};
+
+export type TopReferrerRow = {
+  host: string;
+  views: number;
+  visitors: number;
+};
