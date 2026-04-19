@@ -38,6 +38,12 @@ class Leads_Sync_Tracker {
 		<script data-leads-sync-tracker>
 		(function(){
 			try {
+				// Dedup with the optional Cloudflare Worker injector:
+				// whichever script executes first sets __leadsSyncFired and
+				// the other exits early. Matters on non-cached pages that
+				// contain both the plugin script and the edge-injected one.
+				if (window.__leadsSyncFired) return;
+				window.__leadsSyncFired = true;
 				var body = JSON.stringify({
 					key: <?php echo $api_key_js; ?>,
 					path: location.pathname + location.search,
@@ -46,16 +52,14 @@ class Leads_Sync_Tracker {
 				var url = <?php echo $endpoint_js; ?>;
 				// sendBeacon is fire-and-forget, safe during unload, and uses
 				// text/plain by default so no CORS preflight is needed.
-				if (navigator.sendBeacon) {
-					navigator.sendBeacon(url, new Blob([body], { type: "text/plain;charset=UTF-8" }));
-				} else {
-					fetch(url, {
-						method: "POST",
-						body: body,
-						keepalive: true,
-						headers: { "Content-Type": "text/plain;charset=UTF-8" }
-					}).catch(function(){});
-				}
+				var blob = new Blob([body], { type: "text/plain;charset=UTF-8" });
+				if (navigator.sendBeacon && navigator.sendBeacon(url, blob)) return;
+				fetch(url, {
+					method: "POST",
+					body: body,
+					keepalive: true,
+					headers: { "Content-Type": "text/plain;charset=UTF-8" }
+				}).catch(function(){});
 			} catch (e) {}
 		})();
 		</script>
