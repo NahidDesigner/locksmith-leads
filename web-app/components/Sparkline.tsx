@@ -4,6 +4,10 @@ import { format } from "date-fns";
 
 export type SparkPoint = { day: string; count: number };
 
+function singular(label: string) {
+  return label.endsWith("s") ? label.slice(0, -1) : label;
+}
+
 export function Sparkline({
   data,
   color = "#3b82f6",
@@ -33,7 +37,7 @@ export function Sparkline({
         className="flex items-center justify-center text-[11px] text-muted italic"
       >
         {only
-          ? `${only.count} ${label} on ${format(new Date(only.day), "MMM d")}`
+          ? `${only.count} ${only.count === 1 ? singular(label) : label} on ${format(new Date(only.day), "MMM d")}`
           : `No ${label} in this range`}
       </div>
     );

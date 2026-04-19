@@ -34,6 +34,9 @@ export function generateApiKey() {
 }
 
 export function percentChange(current: number, prior: number): number | null {
-  if (prior === 0) return current === 0 ? 0 : null;
+  // No meaningful comparison when there's no data on either side — caller
+  // should render nothing rather than a misleading "+0%".
+  if (prior === 0 && current === 0) return null;
+  if (prior === 0) return null;
   return ((current - prior) / prior) * 100;
 }
