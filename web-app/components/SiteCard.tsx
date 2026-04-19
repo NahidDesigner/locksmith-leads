@@ -71,7 +71,7 @@ export function SiteCard({ site, visitors, submissionsWeekly, visitorsMonthly }:
               <Stat label="7d" value={visitors.visitors_7d} tone={visTone} sub={pctLabel(visPct)} />
               <Stat label="30d" value={visitors.visitors_30d} />
             </div>
-            <Sparkline data={visitorsMonthly ?? []} color="#3b82f6" height={48} />
+            <Sparkline data={visitorsMonthly ?? []} color="#3b82f6" height={48} label="visitors" />
           </>
         ) : (
           <div className="text-xs text-muted italic py-4 text-center border border-dashed border-border rounded">
@@ -107,12 +107,12 @@ function toneFor(pct: number | null) {
   return "text-warn";
 }
 
-function pctLabel(pct: number | null): string {
-  if (pct === null) return "—";
+function pctLabel(pct: number | null): string | null {
+  if (pct === null) return null;
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
 }
 
-function Stat({ label, value, tone, sub }: { label: string; value: number; tone?: string; sub?: string }) {
+function Stat({ label, value, tone, sub }: { label: string; value: number; tone?: string; sub?: string | null }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-muted">{label}</div>
