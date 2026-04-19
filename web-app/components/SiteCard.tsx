@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { HealthBadge } from "./HealthBadge";
 import { Sparkline, type SparkPoint } from "./Sparkline";
-import { formatNumber, formatRelative, percentChange } from "@/lib/utils";
+import { LocalTime } from "./LocalTime";
+import { formatNumber, percentChange } from "@/lib/utils";
 import type { SiteStatsRow } from "@/lib/supabase";
 
 type Props = {
@@ -64,10 +65,15 @@ export function SiteCard({ site, weekly, monthly }: Props) {
 
       <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
         <span className="text-muted">
-          Last lead: <span className="text-fg">{formatRelative(site.last_submission_at)}</span>
+          Last lead:{" "}
+          <LocalTime
+            iso={site.last_submission_at}
+            mode="relative"
+            className="text-fg"
+          />
         </span>
         <Link
-          href={`/dashboard/submissions?site=${site.site_id}`}
+          href={`/dashboard/submissions?site_id=${site.site_id}`}
           className="text-accent hover:underline"
         >
           View submissions →

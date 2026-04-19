@@ -153,7 +153,7 @@ class Leads_Sync_Backfill {
 				'external_id'       => (int) $row['id'],
 				'elementor_form_id' => (string) $form_key,
 				'form_name'         => (string) $form_name,
-				'submitted_at'      => mysql_to_rfc3339( $row['created_at'] ?? $row['created_at_gmt'] ?? current_time( 'mysql' ) ),
+				'submitted_at'      => self::pick_timestamp( $row ),
 				'data'              => $data,
 				'ip'                => $row['user_ip'] ?? null,
 				'user_agent'        => $row['user_agent'] ?? '',
@@ -199,5 +199,41 @@ class Leads_Sync_Backfill {
 		if ( $s === '' )                                               return 'success';
 		if ( in_array( $s, array( 'success', 'completed', 'read', 'new' ), true ) ) return 'success';
 		return 'failed';
+	}
+
+	/**
+	 * Pick the first usable timestamp from an Elementor submissions row and
+	 * return it as a UTC ISO-8601 string with explicit timezone (e.g.
+	 * "2026-04-19T07:26:16+00:00").
+	 *
+	 * Why this matters: Elementor Pro stores `created_at` as a MySQL DATETIME
+	 * in the site's configured timezone WITHOUT any suffix. `mysql_to_rfc3339`
+	 * just reformats the string and also drops the timezone, so Postgres
+	 * timestamptz ends up interpreting it as UTC — shifting every record
+	 * forward by the site's offset and producing future timestamps (negative
+	 * "s ago" in the UI).
+	 *
+	 * `get_gmt_from_date` honours the WordPress site-timezone setting
+	 * (Settings → General) and converts local → UTC, so the final ISO is
+	 * correct regardless of what zone the WP host is configured in.
+	 *
+	 * Empty strings and `0000-00-00 00:00:00` (MySQL's invalid-date sentinel)
+	 * both slip past `??` (which only catches null) and would otherwise be
+	 * turned into 1970-01-01 — fall back to "now" for those rows.
+	 */
+	private static function pick_timestamp( $row ) {
+		// Prefer the GMT column if Elementor provides one — already UTC.
+		$gmt = $row['created_at_gmt'] ?? null;
+		if ( is_string( $gmt ) && $gmt !== '' && strpos( $gmt, '0000-00-00' ) !== 0 ) {
+			// Format as ISO without shifting (input already UTC).
+			return gmdate( 'c', strtotime( $gmt . ' UTC' ) );
+		}
+
+		$local = $row['created_at'] ?? null;
+		if ( is_string( $local ) && $local !== '' && strpos( $local, '0000-00-00' ) !== 0 ) {
+			return get_gmt_from_date( $local, 'c' );
+		}
+
+		return gmdate( 'c' );
 	}
 }

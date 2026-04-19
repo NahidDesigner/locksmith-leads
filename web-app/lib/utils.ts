@@ -9,9 +9,16 @@ export function formatNumber(n: number) {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
+// Any timestamp before 2000 is treated as invalid — Elementor rows with
+// `0000-00-00 00:00:00` get turned into 1970-01-01 by mysql_to_rfc3339,
+// and "55y ago" is worse than "—".
+const MIN_VALID_MS = Date.UTC(2000, 0, 1);
+
 export function formatRelative(iso: string | null) {
   if (!iso) return "never";
-  const ms = Date.now() - new Date(iso).getTime();
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t) || t < MIN_VALID_MS) return "—";
+  const ms = Date.now() - t;
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
