@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SiteRow } from "@/lib/supabase";
 import { formatRelative } from "@/lib/utils";
-import { HealthBadge } from "@/components/HealthBadge";
 
 export function SitesManager({ initialSites }: { initialSites: SiteRow[] }) {
   const router = useRouter();
@@ -104,7 +103,6 @@ export function SitesManager({ initialSites }: { initialSites: SiteRow[] }) {
           <thead className="bg-bg text-xs uppercase text-muted">
             <tr>
               <th className="text-left px-4 py-2">Site</th>
-              <th className="text-left px-4 py-2">Health</th>
               <th className="text-left px-4 py-2">Last lead</th>
               <th className="text-left px-4 py-2">API key</th>
               <th className="text-right px-4 py-2">Actions</th>
@@ -118,7 +116,6 @@ export function SitesManager({ initialSites }: { initialSites: SiteRow[] }) {
                   <div className="text-xs text-muted">{s.domain}</div>
                   {!s.is_active && <div className="text-xs text-warn mt-1">inactive</div>}
                 </td>
-                <td className="px-4 py-3"><HealthBadge lastHeartbeatAt={s.last_heartbeat_at} /></td>
                 <td className="px-4 py-3 text-muted">{formatRelative(s.last_submission_at)}</td>
                 <td className="px-4 py-3 font-mono text-xs">
                   {showKey === s.id ? (
@@ -138,7 +135,7 @@ export function SitesManager({ initialSites }: { initialSites: SiteRow[] }) {
               </tr>
             ))}
             {sites.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted">No sites yet. Add one above.</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-muted">No sites yet. Add one above.</td></tr>
             )}
           </tbody>
         </table>
