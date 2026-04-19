@@ -28,7 +28,7 @@ locksmithsites/
 ## Setup order
 
 1. Create a Supabase project, run `supabase/schema.sql` in the SQL editor.
-2. Deploy `web-app/` to Vercel with env vars (see `web-app/.env.example`).
+2. Deploy `web-app/` to Vercel with env vars (see `web-app/.env.example`). Root directory must be `web-app/`.
 3. Add each site in the dashboard → copy generated API key.
 4. Install `wp-plugin/leads-sync/` on each WP site, paste API key + dashboard URL.
 5. Hit "Sync Historical" once per site to backfill.
