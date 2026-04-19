@@ -3,22 +3,24 @@ import { HealthBadge } from "./HealthBadge";
 import { Sparkline, type SparkPoint } from "./Sparkline";
 import { LocalTime } from "./LocalTime";
 import { formatNumber, percentChange } from "@/lib/utils";
-import type { SiteStatsRow } from "@/lib/supabase";
+import type { SiteStatsRow, VisitorStatsRow } from "@/lib/supabase";
 
 type Props = {
   site: SiteStatsRow;
-  weekly: SparkPoint[];   // last 7 days
-  monthly: SparkPoint[];  // last 30 days
+  visitors?: VisitorStatsRow | null;
+  submissionsWeekly: SparkPoint[];   // last 7 days
+  visitorsMonthly?: SparkPoint[];    // last 30 days
 };
 
-export function SiteCard({ site, weekly, monthly }: Props) {
-  const pct = percentChange(site.last_7d, site.prior_7d);
-  const dropped = pct !== null && pct <= -30;
-  const pctTone =
-    pct === null ? "text-muted" : pct >= 0 ? "text-good" : dropped ? "text-bad" : "text-warn";
+export function SiteCard({ site, visitors, submissionsWeekly, visitorsMonthly }: Props) {
+  const subPct = percentChange(site.last_7d, site.prior_7d);
+  const subTone = toneFor(subPct);
 
-  // Domain in DB may be stored with protocol + trailing slash
-  // (e.g. "https://foo.com/") or without ("foo.com"). Normalize for display
+  const visPct = visitors ? percentChange(visitors.visitors_7d, visitors.visitors_prior_7d) : null;
+  const visTone = toneFor(visPct);
+
+  // Domain in DB may be stored with protocol + trailing slash (e.g.
+  // "https://foo.com/") or without ("foo.com"). Normalize for display
   // and always produce a well-formed external href.
   const bareDomain = site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   const href = `https://${bareDomain}`;
@@ -40,28 +42,43 @@ export function SiteCard({ site, weekly, monthly }: Props) {
         <HealthBadge lastHeartbeatAt={site.last_heartbeat_at} />
       </div>
 
-      <div className="grid grid-cols-4 gap-2 text-center">
-        <Stat label="24h" value={site.last_24h} />
-        <Stat label="7d" value={site.last_7d} tone={pctTone} sub={pct === null ? "—" : `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`} />
-        <Stat label="30d" value={site.last_30d} />
-        <Stat label="Total" value={site.total_submissions} />
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs uppercase tracking-wider text-muted">This week</span>
-          <span className="text-xs text-muted">{formatNumber(site.last_7d)} total</span>
+      {/* Submissions */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs uppercase tracking-wider text-muted">Submissions</span>
+          <span className="text-xs text-muted">{formatNumber(site.total_submissions)} total</span>
         </div>
-        <Sparkline data={weekly} color="#22c55e" height={56} />
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs uppercase tracking-wider text-muted">Last 30 days</span>
-          <span className="text-xs text-muted">{formatNumber(site.last_30d)} total</span>
+        <div className="grid grid-cols-3 gap-2 text-center mb-2">
+          <Stat label="24h" value={site.last_24h} />
+          <Stat label="7d" value={site.last_7d} tone={subTone} sub={pctLabel(subPct)} />
+          <Stat label="30d" value={site.last_30d} />
         </div>
-        <Sparkline data={monthly} color="#3b82f6" height={56} />
-      </div>
+        <Sparkline data={submissionsWeekly} color="#22c55e" height={48} />
+      </section>
+
+      {/* Visitors */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs uppercase tracking-wider text-muted">Visitors</span>
+          <span className="text-xs text-muted">
+            {visitors ? `${formatNumber(visitors.pageviews_30d)} page views · 30d` : "no data yet"}
+          </span>
+        </div>
+        {visitors ? (
+          <>
+            <div className="grid grid-cols-3 gap-2 text-center mb-2">
+              <Stat label="24h" value={visitors.visitors_24h} />
+              <Stat label="7d" value={visitors.visitors_7d} tone={visTone} sub={pctLabel(visPct)} />
+              <Stat label="30d" value={visitors.visitors_30d} />
+            </div>
+            <Sparkline data={visitorsMonthly ?? []} color="#3b82f6" height={48} />
+          </>
+        ) : (
+          <div className="text-xs text-muted italic py-4 text-center border border-dashed border-border rounded">
+            Beacon not received yet — make sure plugin v1.0.6+ is active on this site.
+          </div>
+        )}
+      </section>
 
       <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
         <span className="text-muted">
@@ -81,6 +98,18 @@ export function SiteCard({ site, weekly, monthly }: Props) {
       </div>
     </div>
   );
+}
+
+function toneFor(pct: number | null) {
+  if (pct === null) return "text-muted";
+  if (pct >= 0) return "text-good";
+  if (pct <= -30) return "text-bad";
+  return "text-warn";
+}
+
+function pctLabel(pct: number | null): string {
+  if (pct === null) return "—";
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
 }
 
 function Stat({ label, value, tone, sub }: { label: string; value: number; tone?: string; sub?: string }) {

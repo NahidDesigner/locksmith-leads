@@ -57,3 +57,14 @@ export type SiteStatsRow = {
   last_30d: number;
   prior_7d: number;
 };
+
+export type VisitorStatsRow = {
+  site_id: string;
+  visitors_24h: number;
+  visitors_7d: number;
+  visitors_30d: number;
+  visitors_prior_7d: number;
+  pageviews_24h: number;
+  pageviews_7d: number;
+  pageviews_30d: number;
+};

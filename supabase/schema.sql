@@ -74,6 +74,20 @@ create table if not exists heartbeats (
   meta                   jsonb not null default '{}'::jsonb
 );
 
+-- One row per page view (anon beacon from client sites).
+-- Session hash = sha256(ip + user-agent + site_id + UTC day).
+-- Rolls over daily so we can count unique visitors per day without
+-- being able to track anyone across days.
+create table if not exists page_views (
+  id            bigserial primary key,
+  site_id       uuid not null references sites(id) on delete cascade,
+  occurred_at   timestamptz not null default now(),
+  day           date not null default (now() at time zone 'UTC')::date,
+  session_hash  text not null,
+  path          text,
+  referrer      text
+);
+
 -- Drop-detection alerts (populated by cron)
 create table if not exists alerts (
   id                   bigserial primary key,
@@ -98,6 +112,9 @@ create index if not exists idx_submissions_site_status      on submissions (site
 create index if not exists idx_heartbeats_site_received     on heartbeats (site_id, received_at desc);
 create index if not exists idx_alerts_site_created          on alerts (site_id, created_at desc);
 create index if not exists idx_alerts_unresolved            on alerts (resolved_at) where resolved_at is null;
+create index if not exists idx_page_views_site_occurred     on page_views (site_id, occurred_at desc);
+create index if not exists idx_page_views_site_day          on page_views (site_id, day);
+create index if not exists idx_page_views_session_day       on page_views (site_id, day, session_hash);
 
 -- ============================================================================
 -- ROW-LEVEL SECURITY
@@ -110,6 +127,7 @@ alter table forms        enable row level security;
 alter table submissions  enable row level security;
 alter table heartbeats   enable row level security;
 alter table alerts       enable row level security;
+alter table page_views   enable row level security;
 
 -- Deny all for anon / authenticated by default (no policies created).
 -- Server-side code uses SUPABASE_SERVICE_ROLE_KEY which bypasses RLS.
@@ -143,4 +161,29 @@ select
 from submissions s
 where s.submitted_at >= now() - interval '60 days'
 group by s.site_id, day
+order by day;
+
+-- Per-site visitor rollup (24h / 7d / 30d unique visitors + page views)
+create or replace view visitor_stats as
+select
+  s.id as site_id,
+  coalesce((select count(distinct session_hash) from page_views where site_id = s.id and occurred_at >= now() - interval '24 hours'), 0) as visitors_24h,
+  coalesce((select count(distinct session_hash) from page_views where site_id = s.id and occurred_at >= now() - interval '7 days'),  0) as visitors_7d,
+  coalesce((select count(distinct session_hash) from page_views where site_id = s.id and occurred_at >= now() - interval '30 days'), 0) as visitors_30d,
+  coalesce((select count(distinct session_hash) from page_views where site_id = s.id and occurred_at >= now() - interval '14 days' and occurred_at < now() - interval '7 days'), 0) as visitors_prior_7d,
+  coalesce((select count(*) from page_views where site_id = s.id and occurred_at >= now() - interval '24 hours'), 0) as pageviews_24h,
+  coalesce((select count(*) from page_views where site_id = s.id and occurred_at >= now() - interval '7 days'),  0) as pageviews_7d,
+  coalesce((select count(*) from page_views where site_id = s.id and occurred_at >= now() - interval '30 days'), 0) as pageviews_30d
+from sites s;
+
+-- Daily visitor counts for the last 60 days (feeds visitor trend sparkline)
+create or replace view visitor_daily as
+select
+  site_id,
+  day,
+  count(distinct session_hash) as visitors,
+  count(*)                     as pageviews
+from page_views
+where day >= (now() - interval '60 days')::date
+group by site_id, day
 order by day;
