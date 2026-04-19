@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateSite } from "@/lib/plugin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { notifyFailedSubmission } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,6 +95,22 @@ export async function POST(req: NextRequest) {
     db.from("sites").update({ last_submission_at: body.submission.submitted_at }).eq("id", site.id),
     db.from("forms").update({ last_submission_at: body.submission.submitted_at }).eq("id", form.id),
   ]);
+
+  // Fire admin email on failed submissions (realtime only — backfill is
+  // bulk and would spam). Runs after the response path so a slow SMTP
+  // hop can't block the plugin.
+  if (insert.status === "failed") {
+    notifyFailedSubmission({
+      siteName: site.display_name,
+      siteDomain: site.domain,
+      formName: body.form.form_name,
+      submittedAt: body.submission.submitted_at,
+      data: body.submission.data ?? {},
+      dashboardUrl: process.env.NEXT_PUBLIC_DASHBOARD_URL
+        ? `${process.env.NEXT_PUBLIC_DASHBOARD_URL}/dashboard/submissions?site_id=${site.id}&status=failed`
+        : undefined,
+    }).catch((e) => console.error("[ingest] notify failed", e));
+  }
 
   return NextResponse.json({ ok: true });
 }

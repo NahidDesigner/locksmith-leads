@@ -19,41 +19,77 @@ type SearchParams = {
 
 const PAGE_SIZE = 50;
 
-// Which form-field keys to surface first in the row preview.
-// Ordered by usefulness — name → contact → message.
-const PREVIEW_PRIORITY = [
-  "name", "full_name", "first_name", "your_name",
-  "email", "your_email", "e_mail",
-  "phone", "your_phone", "mobile", "number", "contact",
-  "service", "subject",
-  "message", "your_message", "comments", "comment",
+const PREVIEW_LIMIT = 5;
+
+// Elementor auto-generates field IDs like `field_4c0a481` when the user
+// doesn't rename them, so we can't rely on key names alone. Detect by
+// value first (email / phone) and fall back to key hints for everything
+// else. Display label comes from the schema-ish hints when possible.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^[+\d][\d\s\-()]{6,}$/;
+
+const KEY_HINTS: Array<[RegExp, string]> = [
+  [/^(name|full[_-]?name|first[_-]?name|your[_-]?name)$/i, "name"],
+  [/^(email|your[_-]?email|e[_-]?mail)$/i, "email"],
+  [/^(phone|your[_-]?phone|mobile|number|contact|tel)$/i, "phone"],
+  [/^(service|subject)$/i, "service"],
+  [/^(message|your[_-]?message|comments?|enquiry|inquiry)$/i, "message"],
+  [/^(address|location|city|postcode|zip)$/i, "address"],
 ];
 
-function pickPreview(data: Record<string, unknown>): Array<[string, string]> {
-  const entries = Object.entries(data ?? {});
-  const byKey = new Map(entries.map(([k, v]) => [k.toLowerCase(), [k, v] as const]));
-  const seen = new Set<string>();
-  const out: Array<[string, string]> = [];
+// Priority → lower number wins. Email is most useful, then name/phone,
+// then context (service/subject), then message, then everything else.
+const CATEGORY_PRIORITY: Record<string, number> = {
+  email: 1,
+  name: 2,
+  phone: 3,
+  service: 4,
+  address: 5,
+  message: 6,
+  other: 99,
+};
 
-  for (const hint of PREVIEW_PRIORITY) {
-    const hit = byKey.get(hint);
-    if (hit && !seen.has(hit[0])) {
-      const text = typeof hit[1] === "string" ? hit[1] : JSON.stringify(hit[1]);
-      if (text?.trim()) {
-        out.push([hit[0], text]);
-        seen.add(hit[0]);
-      }
-      if (out.length >= 3) return out;
+function categorize(key: string, raw: unknown): { label: string; text: string; rank: number } | null {
+  const text = typeof raw === "string" ? raw : raw == null ? "" : JSON.stringify(raw);
+  if (!text.trim()) return null;
+
+  const trimmed = text.trim();
+
+  // 1. Value-based detection — wins over key name because Elementor
+  //    generated IDs don't encode field meaning.
+  if (EMAIL_RE.test(trimmed)) {
+    return { label: "email", text: trimmed, rank: CATEGORY_PRIORITY.email };
+  }
+  if (PHONE_RE.test(trimmed) && /\d/.test(trimmed)) {
+    // Extra guard: value must have ≥6 digits, else it's noise.
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length >= 6) {
+      return { label: "phone", text: trimmed, rank: CATEGORY_PRIORITY.phone };
     }
   }
-  // Fill remaining slots with whatever else has content.
-  for (const [k, v] of entries) {
-    if (out.length >= 3) break;
-    if (seen.has(k)) continue;
-    const text = typeof v === "string" ? v : JSON.stringify(v);
-    if (text?.trim()) out.push([k, text]);
+
+  // 2. Key-name hints for non-distinctive values.
+  for (const [re, cat] of KEY_HINTS) {
+    if (re.test(key)) {
+      return { label: cat, text: trimmed, rank: CATEGORY_PRIORITY[cat] };
+    }
   }
-  return out;
+
+  return { label: key, text: trimmed, rank: CATEGORY_PRIORITY.other };
+}
+
+function pickPreview(data: Record<string, unknown>) {
+  const scored: Array<{ key: string; label: string; text: string; rank: number }> = [];
+  for (const [k, v] of Object.entries(data ?? {})) {
+    const c = categorize(k, v);
+    if (c) scored.push({ key: k, ...c });
+  }
+  // Stable sort: by rank asc, then original insertion order.
+  scored.sort((a, b) => a.rank - b.rank);
+  const top = scored.slice(0, PREVIEW_LIMIT);
+  const topKeys = new Set(top.map((t) => t.key));
+  const rest = Object.entries(data ?? {}).filter(([k]) => !topKeys.has(k));
+  return { top, rest };
 }
 
 export default async function SubmissionsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -172,8 +208,7 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
           </thead>
           <tbody>
             {(rows ?? []).map((r: any) => {
-              const preview = pickPreview(r.data ?? {});
-              const allEntries = Object.entries(r.data ?? {});
+              const { top, rest } = pickPreview(r.data ?? {});
               return (
                 <tr key={r.id} className="border-t border-border align-top hover:bg-bg/40">
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -189,20 +224,20 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
                   <td className="px-4 py-3 text-xs">{r.forms?.form_name ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="space-y-0.5">
-                      {preview.map(([k, v]) => (
-                        <div key={k} className="text-xs truncate max-w-md">
-                          <span className="text-muted">{k}:</span>{" "}
-                          <span>{v}</span>
+                      {top.map((t) => (
+                        <div key={t.key} className="text-xs truncate max-w-md">
+                          <span className="text-muted">{t.label}:</span>{" "}
+                          <span>{t.text}</span>
                         </div>
                       ))}
-                      {preview.length === 0 && <span className="text-xs text-muted italic">(no data)</span>}
-                      {allEntries.length > preview.length && (
+                      {top.length === 0 && <span className="text-xs text-muted italic">(no data)</span>}
+                      {rest.length > 0 && (
                         <details className="mt-1">
                           <summary className="text-[11px] text-muted cursor-pointer hover:text-accent">
-                            +{allEntries.length - preview.length} more field{allEntries.length - preview.length === 1 ? "" : "s"}
+                            +{rest.length} more field{rest.length === 1 ? "" : "s"}
                           </summary>
                           <div className="mt-1 pl-2 border-l border-border space-y-0.5">
-                            {allEntries.filter(([k]) => !preview.some(([pk]) => pk === k)).map(([k, v]) => (
+                            {rest.map(([k, v]) => (
                               <div key={k} className="text-xs">
                                 <span className="text-muted">{k}:</span>{" "}
                                 <span>{typeof v === "string" ? v : JSON.stringify(v)}</span>

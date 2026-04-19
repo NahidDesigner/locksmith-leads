@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
+import { FailureBanner } from "@/components/FailureBanner";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   requireSession();
 
   return (
@@ -18,7 +19,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button className="text-xs text-muted hover:text-slate-200">Sign out</button>
         </form>
       </aside>
-      <main className="p-6 max-w-7xl w-full">{children}</main>
+      <main className="p-6 max-w-7xl w-full space-y-4">
+        <FailureBanner />
+        {children}
+      </main>
     </div>
   );
 }

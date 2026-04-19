@@ -34,7 +34,16 @@ export function Sparkline({
           {showAxis && <YAxis stroke="#64748b" fontSize={10} allowDecimals={false} width={24} />}
           <Tooltip
             cursor={{ fill: "rgba(255,255,255,0.04)" }}
-            contentStyle={{ background: "#181b21", border: "1px solid #282c34", borderRadius: 6, fontSize: 11, padding: "4px 8px" }}
+            contentStyle={{
+              background: "#181b21",
+              border: "1px solid #282c34",
+              borderRadius: 6,
+              fontSize: 11,
+              padding: "4px 8px",
+              color: "#e5e7eb",
+            }}
+            labelStyle={{ color: "#e5e7eb" }}
+            itemStyle={{ color: "#e5e7eb" }}
             labelFormatter={(_, payload) => {
               const day = (payload?.[0]?.payload as SparkPoint | undefined)?.day;
               return day ? format(new Date(day), "PP") : "";
