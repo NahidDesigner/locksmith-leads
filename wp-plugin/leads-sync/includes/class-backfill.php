@@ -37,6 +37,7 @@ class Leads_Sync_Backfill {
 
 		$submissions_table = $prefix . 'e_submissions';
 		$values_table      = $prefix . 'e_submissions_values';
+		$actions_table     = $prefix . 'e_submissions_actions_log';
 
 		// Confirm Elementor tables exist before we try to read them.
 		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $submissions_table ) ) !== $submissions_table ) {
@@ -100,12 +101,40 @@ class Leads_Sync_Backfill {
 			$values_by_submission[ $v['submission_id'] ][ $v['key'] ] = $v['value'];
 		}
 
+		// Aggregate action-level status per submission from the actions_log.
+		// This is the ground truth for Elementor's green-check / warning UI:
+		//  - every action row has status='success'  → submission 'success'
+		//  - any action row != 'success'            → submission 'failed'
+		//  - no rows logged at all                  → fall back to $row['status']
+		$status_by_submission = array();
+		$actions_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $actions_table ) ) === $actions_table;
+		if ( $actions_exists ) {
+			$action_rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT submission_id,
+				        SUM(CASE WHEN LOWER(status) = 'success' THEN 1 ELSE 0 END) AS ok_count,
+				        COUNT(*) AS total_count
+				 FROM {$actions_table}
+				 WHERE submission_id IN ($placeholders)
+				 GROUP BY submission_id",
+				$ids
+			), ARRAY_A );
+			foreach ( (array) $action_rows as $ar ) {
+				$ok    = (int) $ar['ok_count'];
+				$total = (int) $ar['total_count'];
+				$status_by_submission[ $ar['submission_id'] ] = ( $total > 0 && $ok === $total ) ? 'success' : 'failed';
+			}
+		}
+
 		$payload = array();
 		foreach ( $rows as $row ) {
 			$data = isset( $values_by_submission[ $row['id'] ] ) ? $values_by_submission[ $row['id'] ] : array();
 			// Elementor Pro column names vary slightly across versions — fall back gracefully.
 			$form_key  = $row['form_id']    ?? $row['element_id']     ?? 'unknown';
 			$form_name = $row['form_name']  ?? $row['post_id']        ?? 'Unnamed Form';
+			$status = isset( $status_by_submission[ $row['id'] ] )
+				? $status_by_submission[ $row['id'] ]
+				: self::normalize_status( $row['status'] ?? null );
+
 			$payload[] = array(
 				'external_id'       => (int) $row['id'],
 				'elementor_form_id' => (string) $form_key,
@@ -115,7 +144,7 @@ class Leads_Sync_Backfill {
 				'ip'                => $row['user_ip'] ?? null,
 				'user_agent'        => $row['user_agent'] ?? '',
 				'referrer'         => $row['referer'] ?? ( $row['referer_title'] ?? '' ),
-				'status'            => self::normalize_status( $row['status'] ?? null ),
+				'status'            => $status,
 			);
 		}
 
@@ -145,11 +174,16 @@ class Leads_Sync_Backfill {
 	}
 
 	/**
-	 * Collapse Elementor Pro's raw status (new/success/error/spam/…) to
-	 * the binary the dashboard cares about: success or failed.
-	 * Only a clean 'success' counts — anything else is a failure to the client.
+	 * Fallback normalizer used when wp_e_submissions_actions_log is missing
+	 * or empty. Elementor Pro stores wp_e_submissions.status as one of
+	 * 'new' | 'completed' | 'read' | 'trash' | 'spam' — 'completed' / 'read'
+	 * imply all actions succeeded; 'new' just means the row was stored and
+	 * actions haven't finalized (treat as success to avoid false positives).
 	 */
 	private static function normalize_status( $raw ) {
-		return strtolower( (string) $raw ) === 'success' ? 'success' : 'failed';
+		$s = strtolower( (string) $raw );
+		if ( $s === '' )                                               return 'success';
+		if ( in_array( $s, array( 'success', 'completed', 'read', 'new' ), true ) ) return 'success';
+		return 'failed';
 	}
 }
