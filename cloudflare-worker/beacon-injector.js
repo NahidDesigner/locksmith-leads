@@ -54,7 +54,16 @@ const SKIP_PATH_PREFIXES = [
 
 export default {
   async fetch(request) {
-    const response = await fetch(request);
+    // Hostinger/LiteSpeed origins serve HTML pre-compressed with zstd,
+    // which HTMLRewriter cannot decode — the body streams through as
+    // opaque bytes and the <body> handler never matches, so injection
+    // silently no-ops. Workers decodes gzip and brotli transparently,
+    // so cap the forwarded accept-encoding to those two formats.
+    const forwardHeaders = new Headers(request.headers);
+    forwardHeaders.set("accept-encoding", "gzip, br");
+    const forwarded = new Request(request, { headers: forwardHeaders });
+
+    const response = await fetch(forwarded);
 
     const ct = response.headers.get("content-type") || "";
     if (!ct.includes("text/html")) return response;
